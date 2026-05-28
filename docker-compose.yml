@@ -1,0 +1,32 @@
+version: "3.9"
+
+# mt5-ai-trader — Docker Compose
+# Runs PostgreSQL for trade logging.
+# The bot itself runs on your Windows machine (not in Docker) because MT5 is Windows-only.
+#
+# Usage:
+#   docker-compose up -d      ← start postgres in background
+#   docker-compose down       ← stop
+#   docker-compose logs -f    ← view logs
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     trader
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB:       mt5trader
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trader -d mt5trader"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

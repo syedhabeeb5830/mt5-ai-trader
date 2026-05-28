@@ -1,0 +1,23 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"console.log('[mt5-ai-trader] File saved:', process.argv[1])\" 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python scalper.py*)",
+      "Bash(python mt5_server.py*)",
+      "Bash(python -m ai_loop.analyst*)",
+      "Bash(docker-compose*)"
+    ]
+  }
+}
