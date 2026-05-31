@@ -15,9 +15,10 @@ MT5_KEY  = os.getenv("MT5_API_KEY", "")
 HEADERS  = {"X-API-Key": MT5_KEY} if MT5_KEY else {}
 
 # ── AI Provider ───────────────────────────────────────────────────────────────
-AI_PROVIDER = os.getenv("AI_PROVIDER", "claude")      # claude | openai | gemini
-AI_API_KEY  = os.getenv("AI_API_KEY", "")
-AI_MODEL    = os.getenv("AI_MODEL", "claude-sonnet-4-6")
+AI_PROVIDER  = os.getenv("AI_PROVIDER", "claude")     # claude | openai | gemini
+AI_API_KEY   = os.getenv("AI_API_KEY", "")
+AI_MODEL     = os.getenv("AI_MODEL", "claude-sonnet-4-6")
+AI_BASE_URL  = os.getenv("AI_BASE_URL", "")           # override for OpenRouter etc.
 
 # ── Symbol ────────────────────────────────────────────────────────────────────
 SYMBOL = os.getenv("SYMBOL", "XAUUSD")

@@ -69,7 +69,8 @@ class TradeAnalyst:
         except ImportError:
             raise ImportError("Install openai: pip install openai")
 
-        client = OpenAI(api_key=self.api_key)
+        base_url = config.AI_BASE_URL or None
+        client = OpenAI(api_key=self.api_key, base_url=base_url)
         response = client.chat.completions.create(
             model=self.model or "gpt-4o",
             messages=[
