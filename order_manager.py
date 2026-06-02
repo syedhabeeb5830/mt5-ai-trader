@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import List, Optional
 
 import httpx
@@ -69,6 +70,11 @@ class OrderManager:
     # ── Place ────────────────────────────────────────────────────────────────
 
     async def enter(self, signal: Signal, ask: float, bid: float) -> Optional[OpenTrade]:
+        # BUG-5 FIX: Reject if spread >= SL_POINTS — trade would already be past its stop
+        spread = round(ask - bid, 5)
+        if spread >= config.SL_POINTS:
+            return None
+
         if signal == Signal.BUY:
             entry_price = ask
             sl = round(entry_price - config.SL_POINTS, 2)
@@ -149,6 +155,26 @@ class OrderManager:
 
     # ── Monitor & Timeout ────────────────────────────────────────────────────
 
+    async def check_paper_exits(self, bid: float, ask: float) -> None:
+        """BUG-1 FIX: Enforce SL and TP on every tick in paper mode.
+        Closes at the exact SL/TP price, not whatever price happens to be at timeout.
+        """
+        if not config.PAPER:
+            return
+        for trade in self.trades:
+            if trade.closed:
+                continue
+            if trade.direction == Signal.BUY:
+                if bid <= trade.sl:
+                    await self.close(trade, trade.sl)
+                elif bid >= trade.tp:
+                    await self.close(trade, trade.tp)
+            else:  # SELL
+                if ask >= trade.sl:
+                    await self.close(trade, trade.sl)
+                elif ask <= trade.tp:
+                    await self.close(trade, trade.tp)
+
     async def check_timeouts(self, current_price: float) -> None:
         if config.POSITION_TIMEOUT_SEC <= 0:
             return
@@ -158,13 +184,24 @@ class OrderManager:
                 await self.close(trade, current_price)
 
     async def sync_closed_from_api(self) -> None:
-        """Mark local trades as closed if no longer in MT5 positions."""
+        """BUG-2 FIX: Mark local trades closed and fetch actual PnL from MT5 deal history."""
         if config.PAPER:
             return
         live_tickets = {p["ticket"] for p in await self.open_positions()}
         for trade in self.trades:
             if not trade.closed and trade.ticket not in live_tickets:
+                trade.closed_pnl = await self._fetch_deal_pnl(trade.ticket)
                 trade.closed = True
+
+    async def _fetch_deal_pnl(self, ticket: int) -> float:
+        """Fetch the realised PnL of a closed position from MT5 deal history."""
+        try:
+            r = await self._client.get(f"/deals/{ticket}")
+            if r.status_code == 200:
+                return float(r.json().get("profit", 0.0))
+        except Exception:
+            pass
+        return 0.0
 
     # ── Stats ────────────────────────────────────────────────────────────────
 
@@ -174,11 +211,22 @@ class OrderManager:
 
     @property
     def total_today(self) -> int:
-        return len(self.trades)
+        """BUG-3 FIX: Count only trades opened today (UTC). Survives midnight correctly."""
+        today = datetime.now(timezone.utc).date()
+        return sum(
+            1 for t in self.trades
+            if datetime.fromtimestamp(t.opened_at, tz=timezone.utc).date() == today
+        )
 
     @property
     def realized_pnl(self) -> float:
-        return sum(t.closed_pnl for t in self.trades if t.closed)
+        """BUG-3 FIX: Sum PnL only for trades opened today (UTC)."""
+        today = datetime.now(timezone.utc).date()
+        return sum(
+            t.closed_pnl for t in self.trades
+            if t.closed
+            and datetime.fromtimestamp(t.opened_at, tz=timezone.utc).date() == today
+        )
 
     async def close_all(self, current_price: float) -> None:
         for trade in self.trades:

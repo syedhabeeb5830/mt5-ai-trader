@@ -193,6 +193,24 @@ async def get_position(ticket: int, x_api_key: Optional[str] = Header(default=No
     }
 
 
+@app.get("/deals/{ticket}")
+async def get_deal_pnl(ticket: int, x_api_key: Optional[str] = Header(default=None)):
+    """Return the total realised PnL for a closed position by summing its deal history."""
+    _auth(x_api_key)
+    _require_mt5()
+
+    import datetime as _dt
+    date_from = _dt.datetime.now() - _dt.timedelta(days=30)
+    date_to   = _dt.datetime.now() + _dt.timedelta(days=1)
+
+    deals = mt5.history_deals_get(date_from, date_to, position=ticket)
+    if not deals:
+        return {"profit": 0.0, "found": False}
+
+    profit = sum(d.profit for d in deals)
+    return {"profit": round(profit, 2), "found": True}
+
+
 # ── Orders ────────────────────────────────────────────────────────────────────
 
 class OrderRequest(BaseModel):

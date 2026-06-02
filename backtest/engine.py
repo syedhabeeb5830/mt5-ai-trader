@@ -3,13 +3,11 @@ Backtest Engine
 ─────────────────────────────────────────────────────────────────────────────
 Fetches historical OHLCV data from MT5 and runs a strategy against it.
 Works with any strategy that extends BaseStrategy.
-
 Data source:
   - MetaTrader5 Python package (Windows, MT5 must be running)
   - Falls back to CSV files in backtest/data/ if MT5 not available
 ─────────────────────────────────────────────────────────────────────────────
 """
-
 from __future__ import annotations
 
 import os

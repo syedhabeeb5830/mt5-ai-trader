@@ -51,3 +51,15 @@ MAX_DAILY_TRADES = int(os.getenv("MAX_DAILY_TRADES",   "30"))
 MAGIC   = 420001
 COMMENT = "mt5-ai-trader"
 PAPER   = os.getenv("PAPER", "false").lower() in ("true", "1", "yes")
+
+# ── Dynamic Strategy Selection ────────────────────────────────────────────────
+# Set ACTIVE_STRATEGY=auto to auto-select via logs/recommendation.json,
+# or set a specific name e.g. ACTIVE_STRATEGY=ema7_tbm_v2
+ACTIVE_STRATEGY   = os.getenv("ACTIVE_STRATEGY",   "momentum_scalper")
+
+# Restrict live trading to specific UTC hours. Format: "START-END" e.g. "14-18".
+# Leave empty for 24h trading.
+TRADE_HOURS_UTC   = os.getenv("TRADE_HOURS_UTC",   "")
+
+# How often (in seconds) the live strategy runner refreshes OHLCV bars from MT5.
+OHLCV_REFRESH_SEC = int(os.getenv("OHLCV_REFRESH_SEC", "60"))
