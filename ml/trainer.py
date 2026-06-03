@@ -228,6 +228,7 @@ def _evaluate_folds(
     y: np.ndarray,
     model_type: str,
     n_splits: int,
+    feature_names: list[str] | None = None,
 ) -> list[FoldResult]:
     from sklearn.metrics import (
         accuracy_score, precision_score, recall_score,
@@ -255,7 +256,8 @@ def _evaluate_folds(
         model = CalibratedClassifierCV(base, method="isotonic", cv=3)
         model.fit(X_tr, y_tr)
 
-        probs = model.predict_proba(X_te)[:, 1]
+        X_te_df = pd.DataFrame(X_te, columns=feature_names) if feature_names is not None else X_te
+        probs = model.predict_proba(X_te_df)[:, 1]
         preds = (probs >= 0.5).astype(int)
 
         results.append(FoldResult(
@@ -332,9 +334,11 @@ def _model_diagnostics(
 
     base = _build_model(model_type)
     model = CalibratedClassifierCV(base, method="isotonic", cv=3)
-    model.fit(X_tr, y_tr)
+    X_tr_df = pd.DataFrame(X_tr, columns=feature_names)
+    X_te_df = pd.DataFrame(X_te, columns=feature_names)
+    model.fit(X_tr_df, y_tr)
 
-    probs = model.predict_proba(X_te)[:, 1]
+    probs = model.predict_proba(X_te_df)[:, 1]
     preds = (probs >= 0.5).astype(int)
     tn, fp, fn, tp = confusion_matrix(y_te, preds, labels=[0, 1]).ravel()
     quantiles = np.quantile(probs, [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0])
@@ -470,7 +474,7 @@ def train(
               f"{len(feature_names)} features, TP-rate={tp_rate:.1%}")
 
     # Walk-forward evaluation
-    folds = _evaluate_folds(X, y, instrument.model_type, WALK_FORWARD_SPLITS)
+    folds = _evaluate_folds(X, y, instrument.model_type, WALK_FORWARD_SPLITS, feature_names)
     if verbose and folds:
         print(f"\n  Walk-forward results ({WALK_FORWARD_SPLITS} folds):")
         print(f"  {'Fold':>4}  {'Train':>6}  {'Test':>5}  {'Acc':>5}  {'Prec':>5}  "
@@ -489,7 +493,7 @@ def train(
     # Train final model on all data
     base      = _build_model(instrument.model_type)
     final_mdl = CalibratedClassifierCV(base, method="isotonic", cv=3)
-    final_mdl.fit(X, y)
+    final_mdl.fit(pd.DataFrame(X, columns=feature_names), y)
 
     # Version string: SYMBOL_direction_YYYYMMDD_vN
     today   = datetime.now(timezone.utc).strftime("%Y%m%d")

@@ -402,7 +402,12 @@ def compute_features(
               f"Filtering + writing {n_entry:,} rows...", flush=True)
 
     # ── Phase 3: Filter to needed rows, drop warmup rows ─────────────────────
-    combined["_ts_int"] = (combined.index.astype("int64") // 10**9).astype(int)
+    # pandas 2.x uses datetime64[s, UTC] (second resolution) for unit="s" data,
+    # so .astype("int64") gives epoch seconds directly — NOT nanoseconds.
+    # Use .asi8 (raw int in native unit) + per-unit divisor to normalise to seconds.
+    _idx_unit   = getattr(combined.index.dtype, "unit", "ns")
+    _to_seconds = {"ns": 10**9, "us": 10**6, "ms": 10**3, "s": 1}.get(_idx_unit, 10**9)
+    combined["_ts_int"] = (combined.index.asi8 // _to_seconds).astype(int)
     need_ts         = set(cid_by_ts.keys())
     matched_rows    = combined[combined["_ts_int"].isin(need_ts)]
 

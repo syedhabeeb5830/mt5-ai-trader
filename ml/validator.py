@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from ml.database import get_db
 from ml.instrument_config import (
@@ -228,8 +229,10 @@ def walk_forward_label_backtest(inst: InstrumentConfig, direction: str) -> Backt
         if len(X_te) < 10 or len(np.unique(y_tr)) < 2 or counts.min() < 3:
             continue
         model = CalibratedClassifierCV(_build_model(inst.model_type), method="isotonic", cv=3)
-        model.fit(X_tr, y_tr)
-        probs = model.predict_proba(X_te)[:, 1]
+        X_tr_df = pd.DataFrame(X_tr, columns=_feature_names)
+        X_te_df = pd.DataFrame(X_te, columns=_feature_names)
+        model.fit(X_tr_df, y_tr)
+        probs = model.predict_proba(X_te_df)[:, 1]
         if len(np.unique(y_te)) > 1:
             aucs.append(float(roc_auc_score(y_te, probs)))
         selected = probs >= threshold
