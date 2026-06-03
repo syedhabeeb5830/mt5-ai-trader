@@ -182,7 +182,8 @@ class TestFeatureEngine:
 
     def test_features_multi_tf(self):
         from ml.feature_engine import build_feature_vector
-        df_m5 = _make_ohlcv(200, freq="5min")
+        # 500 M5 bars = ~41.7h, so H1 slice has ~42 bars (≥30 minimum)
+        df_m5 = _make_ohlcv(500, freq="5min")
         df_h1 = _make_ohlcv(100, freq="1h")
         bars  = {"M5": df_m5, "H1": df_h1}
         ts    = int(df_m5.index[-1].timestamp())

@@ -234,7 +234,7 @@ def main() -> None:
     parser.add_argument("--symbol",    default="",  help="Instrument (default: .env SYMBOL)")
     parser.add_argument("--all",       action="store_true", help="All configured instruments")
     parser.add_argument("--days",      type=int, default=365, help="Lookback for collection")
-    parser.add_argument("--direction", default="BUY", choices=["BUY", "SELL", "BOTH"])
+    parser.add_argument("--direction", default="BOTH", choices=["BUY", "SELL", "BOTH"])
     parser.add_argument("--universal", action="store_true", help="Train universal model")
     parser.add_argument("--retrain-if-degraded", action="store_true",
                         help="Auto retrain when monitor detects degradation")

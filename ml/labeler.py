@@ -144,16 +144,19 @@ def label_instrument(
         ts    = ts_arr[i]
         close = closes[i]
         half_spread = spread / 2.0
+        scale = instrument.label_point_value   # e.g. 1.0 for Gold, 0.0001 for FX
+        tp_dist = profile.tp_points * scale
+        sl_dist = profile.sl_points * scale
 
         for direction in ("BUY", "SELL"):
             if direction == "BUY":
                 entry  = close + half_spread
-                tp_abs = round(entry + profile.tp_points, 6)
-                sl_abs = round(entry - profile.sl_points, 6)
+                tp_abs = round(entry + tp_dist, 6)
+                sl_abs = round(entry - sl_dist, 6)
             else:
                 entry  = close - half_spread
-                tp_abs = round(entry - profile.tp_points, 6)
-                sl_abs = round(entry + profile.sl_points, 6)
+                tp_abs = round(entry - tp_dist, 6)
+                sl_abs = round(entry + sl_dist, 6)
 
             lbl, bars_to_exit, exit_price = _label_candle(
                 i, closes, highs, lows, direction,

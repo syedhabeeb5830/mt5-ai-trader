@@ -232,6 +232,13 @@ def train(
                   f"need {MIN_SAMPLES_TO_TRAIN}. Collect more data first.")
         return None
 
+    n_classes = len(np.unique(y))
+    if n_classes < 2:
+        if verbose:
+            print(f"  [{instrument.symbol}/{direction}] All labels are the same class "
+                  f"(TP-rate={y.mean():.1%}). Adjust label_point_value or collect more data.")
+        return None
+
     if verbose:
         tp_rate = y.mean()
         print(f"  [{instrument.symbol}/{direction}] {len(X)} samples, "

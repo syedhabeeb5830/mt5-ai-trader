@@ -111,6 +111,10 @@ class InstrumentConfig:
     # Session filter (UTC hours, "" = 24h)
     trade_hours_utc:   str = ""
 
+    # TP/SL scaling: profile tp_points × label_point_value = raw price distance.
+    # Set to pip_size for FX (EURUSD=0.0001), 1.0 for Gold/BTC (profile in raw $).
+    label_point_value: float = 1.0
+
     # Extra arbitrary settings passed through to feature engine / trainer
     extra:             dict[str, Any] = field(default_factory=dict)
 
@@ -139,6 +143,7 @@ INSTRUMENTS: dict[str, InstrumentConfig] = {
         buy_threshold=float(os.getenv("ML_BUY_THRESH_EURUSD", "0.65")),
         sell_threshold=float(os.getenv("ML_SELL_THRESH_EURUSD", "0.35")),
         trade_hours_utc=os.getenv("ML_HOURS_EURUSD", "8-17"),
+        label_point_value=0.0001,  # intraday tp=10 → 10 pips = 0.0010
     ),
     "GBPUSD": InstrumentConfig(
         symbol="GBPUSD",   display_name="Pound/Dollar",
@@ -151,6 +156,7 @@ INSTRUMENTS: dict[str, InstrumentConfig] = {
         buy_threshold=float(os.getenv("ML_BUY_THRESH_GBPUSD", "0.68")),
         sell_threshold=float(os.getenv("ML_SELL_THRESH_GBPUSD", "0.32")),
         trade_hours_utc=os.getenv("ML_HOURS_GBPUSD", "8-17"),
+        label_point_value=0.0001,  # intraday tp=10 → 10 pips = 0.0010
     ),
     "USDJPY": InstrumentConfig(
         symbol="USDJPY",   display_name="Dollar/Yen",
@@ -163,6 +169,7 @@ INSTRUMENTS: dict[str, InstrumentConfig] = {
         buy_threshold=float(os.getenv("ML_BUY_THRESH_USDJPY", "0.68")),
         sell_threshold=float(os.getenv("ML_SELL_THRESH_USDJPY", "0.32")),
         trade_hours_utc=os.getenv("ML_HOURS_USDJPY", "0-9"),
+        label_point_value=0.01,    # intraday tp=10 → 10 pips = 0.10 yen
     ),
     "BTCUSD": InstrumentConfig(
         symbol="BTCUSD",   display_name="Bitcoin/Dollar",
@@ -174,7 +181,8 @@ INSTRUMENTS: dict[str, InstrumentConfig] = {
         model_mode="per_instrument",
         buy_threshold=float(os.getenv("ML_BUY_THRESH_BTCUSD", "0.80")),
         sell_threshold=float(os.getenv("ML_SELL_THRESH_BTCUSD", "0.20")),
-        trade_hours_utc="",  # BTC is 24h
+        trade_hours_utc="",        # BTC is 24h
+        label_point_value=50.0,   # scalp tp=4 → $200 move (BTC prices in $k)
     ),
 }
 
