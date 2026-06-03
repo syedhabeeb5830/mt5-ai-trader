@@ -186,15 +186,27 @@ class LiveStrategyRunner:
     def _resolve_timeframes(self) -> List[str]:
         try:
             from backtest.run import STRATEGY_TIMEFRAMES
+            if self._strategy.name == "ml_scalper":
+                from ml.instrument_config import get_instrument
+                return get_instrument(self._symbol).timeframes
             return STRATEGY_TIMEFRAMES.get(self._strategy.name, ["1H"])
         except Exception:
+            if self._strategy.name == "ml_scalper":
+                from ml.instrument_config import get_instrument
+                return get_instrument(self._symbol).timeframes
             return ["1H"]
 
     def _resolve_entry_tf(self) -> str:
         try:
             from backtest.run import STRATEGY_ENTRY_TF
+            if self._strategy.name == "ml_scalper":
+                from ml.instrument_config import get_instrument
+                return get_instrument(self._symbol).entry_tf
             return STRATEGY_ENTRY_TF.get(self._strategy.name, "1H")
         except Exception:
+            if self._strategy.name == "ml_scalper":
+                from ml.instrument_config import get_instrument
+                return get_instrument(self._symbol).entry_tf
             return "1H"
 
     # ── Background refresh loop ──────────────────────────────────────────────
@@ -274,13 +286,22 @@ class LiveStrategyRunner:
 
     def debug_snapshot(self) -> dict:
         """Compatible with MomentumEngine.debug_snapshot() for the dashboard."""
-        return {
+        snapshot = {
             "strategy":      self._strategy.name,
             "signal":        self._last_signal.value,
             "last_refresh":  f"{self.seconds_since_refresh:.0f}s ago",
             "entry_tf":      self._entry_tf,
             "hour_filter":   config.TRADE_HOURS_UTC or "none",
         }
+        if self._last_setup is not None:
+            snapshot.update({
+                "rr":       getattr(self._last_setup, "rr", None),
+                "entry":    getattr(self._last_setup, "entry", None),
+                "sl":       getattr(self._last_setup, "sl", None),
+                "tp":       getattr(self._last_setup, "tp", None),
+                "reason":   getattr(self._last_setup, "reason", ""),
+            })
+        return snapshot
 
 
 # ── Factory — build runner from strategy name ─────────────────────────────────

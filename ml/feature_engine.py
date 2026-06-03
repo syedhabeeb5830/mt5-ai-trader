@@ -97,6 +97,13 @@ def _session_flags(ts_utc: int) -> dict[str, float]:
     }
 
 
+def _index_to_unix_seconds(index: pd.DatetimeIndex) -> np.ndarray:
+    """Return Unix seconds for a DatetimeIndex across pandas datetime units."""
+    unit = getattr(index.dtype, "unit", "ns")
+    divisor = {"ns": 10**9, "us": 10**6, "ms": 10**3, "s": 1}.get(unit, 10**9)
+    return (index.asi8 // divisor).astype(np.int64)
+
+
 # ── Per-timeframe feature extractor ──────────────────────────────────────────
 
 def _extract_tf_features(df: pd.DataFrame, tf_label: str) -> dict[str, float]:
@@ -263,7 +270,7 @@ def build_feature_vector(
         if df is None or len(df) < 30:
             continue
         # Slice to only bars UP TO (and including) ts_utc — prevent lookahead
-        df_slice = df[df.index.astype("int64") // 10**9 <= ts_utc]
+        df_slice = df[_index_to_unix_seconds(df.index) <= ts_utc]
         if len(df_slice) < 30:
             continue
         feat.update(_extract_tf_features(df_slice, tf))
@@ -402,12 +409,7 @@ def compute_features(
               f"Filtering + writing {n_entry:,} rows...", flush=True)
 
     # ── Phase 3: Filter to needed rows, drop warmup rows ─────────────────────
-    # pandas 2.x uses datetime64[s, UTC] (second resolution) for unit="s" data,
-    # so .astype("int64") gives epoch seconds directly — NOT nanoseconds.
-    # Use .asi8 (raw int in native unit) + per-unit divisor to normalise to seconds.
-    _idx_unit   = getattr(combined.index.dtype, "unit", "ns")
-    _to_seconds = {"ns": 10**9, "us": 10**6, "ms": 10**3, "s": 1}.get(_idx_unit, 10**9)
-    combined["_ts_int"] = (combined.index.asi8 // _to_seconds).astype(int)
+    combined["_ts_int"] = _index_to_unix_seconds(combined.index)
     need_ts         = set(cid_by_ts.keys())
     matched_rows    = combined[combined["_ts_int"].isin(need_ts)]
 

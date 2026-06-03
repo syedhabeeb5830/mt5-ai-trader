@@ -67,20 +67,40 @@ def build_layout(
     # ── Signal Panel ────────────────────────────────────────────────────────
     sig_color = {"BUY": "green", "SELL": "red", "WAIT": "dim"}.get(signal.value, "white")
     sig_text = Text(f"  {signal.value}  ", style=f"bold {sig_color} on black")
+    is_live_strategy = "strategy" in momentum_dbg or "last_refresh" in momentum_dbg
 
     mom_table = Table.grid(padding=(0, 1))
     mom_table.add_column(style="dim")
     mom_table.add_column(style="white")
-    mom_table.add_row("Signal",   sig_text)
-    mom_table.add_row("UP ticks", f"[green]{momentum_dbg.get('up', 0)}[/green]")
-    mom_table.add_row("DN ticks", f"[red]{momentum_dbg.get('down', 0)}[/red]")
-    mom_table.add_row("Move pts", f"[yellow]{momentum_dbg.get('move', 0.0):.3f}[/yellow]")
-    mom_table.add_row("Spread",   f"[yellow]{momentum_dbg.get('spread', 0.0):.3f}[/yellow]")
-    mom_table.add_row("Ticks",    str(tick_count))
+    mom_table.add_row("Signal", sig_text)
+
+    if is_live_strategy:
+        mom_table.add_row("Strategy", f"[cyan]{momentum_dbg.get('strategy', 'unknown')}[/cyan]")
+        mom_table.add_row("Entry TF", str(momentum_dbg.get('entry_tf', '')))
+        mom_table.add_row("Refresh", str(momentum_dbg.get('last_refresh', '')))
+        mom_table.add_row("Hour filter", str(momentum_dbg.get('hour_filter', 'none')))
+        if momentum_dbg.get("rr") is not None:
+            mom_table.add_row("RR", f"{float(momentum_dbg.get('rr')):.2f}")
+        if momentum_dbg.get("entry") is not None:
+            mom_table.add_row("Entry", f"{float(momentum_dbg.get('entry')):.2f}")
+        if momentum_dbg.get("sl") is not None:
+            mom_table.add_row("SL", f"{float(momentum_dbg.get('sl')):.2f}")
+        if momentum_dbg.get("tp") is not None:
+            mom_table.add_row("TP", f"{float(momentum_dbg.get('tp')):.2f}")
+        if momentum_dbg.get("reason"):
+            mom_table.add_row("Reason", str(momentum_dbg.get('reason', '')))
+        mom_table.add_row("Ticks", str(tick_count))
+    else:
+        mom_table.add_row("UP ticks", f"[green]{momentum_dbg.get('up', 0)}[/green]")
+        mom_table.add_row("DN ticks", f"[red]{momentum_dbg.get('down', 0)}[/red]")
+        mom_table.add_row("Move pts", f"[yellow]{momentum_dbg.get('move', 0.0):.3f}[/yellow]")
+        mom_table.add_row("Spread",   f"[yellow]{momentum_dbg.get('spread', 0.0):.3f}[/yellow]")
+        mom_table.add_row("Ticks",    str(tick_count))
     mom_table.add_row("SL / TP",  f"{config.SL_POINTS} / {config.TP_POINTS} pts")
     mom_table.add_row("Volume",   f"{config.VOLUME} lot")
 
-    layout["left"].update(Panel(mom_table, title="[bold]Momentum Signal[/bold]", border_style="cyan"))
+    panel_title = "[bold]ML Strategy[/bold]" if is_live_strategy else "[bold]Momentum Signal[/bold]"
+    layout["left"].update(Panel(mom_table, title=panel_title, border_style="cyan"))
 
     # ── Positions Table ──────────────────────────────────────────────────────
     pos_table = Table("Ticket", "Dir", "Entry", "SL", "TP", "Age(s)", "Est PnL",
