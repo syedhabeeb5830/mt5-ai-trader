@@ -489,3 +489,121 @@ Based on the code audit alone (before any backtest):
 ---
 
 _Ready to build Phase 1 on confirmation._
+
+---
+
+## PHASE ML — Machine Learning Trading Platform ✅ COMPLETE (2026-06)
+
+**Objective:** Replace the rule-based signal engine with a calibrated ML probability engine.
+Platform is instrument-agnostic, configuration-driven, and self-improving.
+
+### Architecture
+
+```
+MT5 / yfinance
+     │
+     ▼
+ml/data_collector.py     ← fetch OHLCV for all configured TFs
+     │
+     ▼
+ml/feature_engine.py     ← 25+ multi-TF features per entry-bar (no lookahead)
+     │
+     ▼
+ml/labeler.py            ← forward-scan labels (TP before SL within horizon)
+     │
+     ▼
+ml/trainer.py            ← walk-forward train → CalibratedClassifierCV model
+     │
+     ▼
+ml/probability_engine.py ← load model, predict P(TP|feature_vec), SHAP
+     │
+     ▼
+ml/decision_engine.py    ← threshold logic → BUY / SELL / WAIT
+     │
+     ▼
+strategies/ml_scalper.py ← BaseStrategy subclass, REGISTRY["ml_scalper"]
+     │
+     ▼
+scalper.py               ← unchanged, ATR-based SL/TP
+     │
+     ▼
+ml/monitor.py            ← rolling win-rate drift detector, auto-halt
+```
+
+### Phase A — Data Foundation ✅
+
+| File | Purpose |
+|------|---------|
+| `ml/__init__.py` | Module init |
+| `ml/instrument_config.py` | All ML config — instruments, label profiles, thresholds |
+| `ml/database.py` | SQLite layer — 5 tables, WAL mode |
+| `ml/data_collector.py` | Backfill + live OHLCV from MT5 or yfinance fallback |
+| `ml/feature_engine.py` | 25+ multi-TF features, no lookahead |
+| `ml/labeler.py` | Forward-scan labeling (BUY + SELL, all profiles) |
+
+### Phase B — ML Core ✅
+
+| File | Purpose |
+|------|---------|
+| `ml/trainer.py` | Walk-forward, XGB/LGB/RF, calibrated probabilities |
+| `ml/probability_engine.py` | Model loading, prediction, SHAP explanations |
+| `ml/decision_engine.py` | Threshold logic, conflict resolution |
+| `strategies/ml_scalper.py` | REGISTRY["ml_scalper"] — drop-in BaseStrategy |
+
+### Phase C — Live Integration ✅
+
+- `strategies/__init__.py` — `ml_scalper` registered in REGISTRY
+- `train.py` — single unified entry point for entire pipeline
+
+### Phase D — Self-Improving Loop ✅
+
+- `ml/monitor.py` — rolling win-rate tracker, drift detection, auto-halt
+- `train.py --retrain` — incremental retrain with live prediction outcomes
+
+### Quick Start
+
+```bash
+# 1. Install ML dependencies
+pip install xgboost lightgbm scikit-learn shap
+
+# 2. Collect data + train (first time, takes a few minutes)
+python train.py
+
+# 3. Run the ML-powered scalper
+python scalper.py --strategy ml_scalper --paper
+
+# 4. Monitor model health
+python train.py --monitor
+
+# 5. Monthly retrain with new data
+python train.py --retrain
+```
+
+### Configuration (`.env`)
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `ML_LABEL_PROFILE` | `momentum` | scalp / intraday / swing / momentum |
+| `ML_ATR_SL_MULT` | `0.5` | SL = ATR(14) × this |
+| `ML_RR_RATIO` | `2.0` | TP = SL × this |
+| `ML_BUY_THRESH_XAUUSD` | `0.72` | Min P(TP) to open BUY |
+| `ML_MODEL_TYPE_XAUUSD` | `xgboost` | xgboost / lightgbm / random_forest |
+| `ML_UNIVERSAL_MODEL` | `false` | Train one model for all instruments |
+
+### Performance Targets
+
+| Metric | Baseline (momentum) | ML Target |
+|--------|---------------------|-----------|
+| Win Rate | 24.5% | 40–50% |
+| Profit Factor | 1.068 | 1.4–1.8 |
+| Trades/day | ~30 | 8–12 (quality filter) |
+| Avg RR | ~5:1 | 2:1 (ATR-based) |
+
+### Key Design Decisions
+
+- **Nothing hardcoded:** TFs, TP/SL, thresholds, symbols all from `instrument_config.py` + env vars
+- **Instrument-agnostic:** add a new instrument by adding 1 entry to `INSTRUMENTS` dict
+- **Model not required to run:** if no `.pkl` exists for a symbol, `MLScalper.evaluate()` returns `None`
+- **yfinance fallback:** data collection works without MT5 running (for feature dev / offline)
+- **SHAP explanations:** every live prediction includes top-N feature drivers for transparency
+
