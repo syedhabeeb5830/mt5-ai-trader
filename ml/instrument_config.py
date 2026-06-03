@@ -189,10 +189,14 @@ INSTRUMENTS: dict[str, InstrumentConfig] = {
 # Which symbol to trade in this session (override with SYMBOL env var or scalper --symbol flag)
 ACTIVE_SYMBOL: str = os.getenv("SYMBOL", "XAUUSD")
 
+SYMBOL_ALIASES: dict[str, str] = {
+    "GOLD": "XAUUSD",
+}
+
 
 def get_instrument(symbol: str | None = None) -> InstrumentConfig:
     """Return config for `symbol`, falling back to ACTIVE_SYMBOL."""
-    key = (symbol or ACTIVE_SYMBOL).upper()
+    key = SYMBOL_ALIASES.get((symbol or ACTIVE_SYMBOL).upper(), (symbol or ACTIVE_SYMBOL).upper())
     if key not in INSTRUMENTS:
         raise ValueError(
             f"Unknown instrument '{key}'. "

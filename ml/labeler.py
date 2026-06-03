@@ -40,6 +40,9 @@ from ml.instrument_config import (
 )
 
 
+MAX_LABEL_ROWS = 1_000_000
+
+
 # ── Core labeling logic ───────────────────────────────────────────────────────
 
 def _label_candle(
@@ -103,9 +106,9 @@ def label_instrument(
             since_ts = row[0] if row and row[0] else None
 
     # Load entry-TF candles
-    candles = db.get_candles(instrument.symbol, entry_tf, limit=200_000, since_ts=since_ts)
+    candles = db.get_candles(instrument.symbol, entry_tf, limit=MAX_LABEL_ROWS, since_ts=since_ts)
     # We need horizon extra bars beyond the last labellable candle, so load without since filter
-    all_candles = db.get_candles(instrument.symbol, entry_tf, limit=200_000)
+    all_candles = db.get_candles(instrument.symbol, entry_tf, limit=MAX_LABEL_ROWS)
     if not all_candles:
         if verbose:
             print(f"  [{instrument.symbol}] No candles. Run data_collector first.")
@@ -135,6 +138,11 @@ def label_instrument(
 
     label_rows = []
     labellable = len(all_candles) - profile.horizon_bars  # last N bars can't be labelled yet
+    if labellable <= 0:
+        if verbose:
+            print(f"  [{instrument.symbol}] Need more candles: {len(all_candles)} available, "
+                  f"horizon={profile.horizon_bars}.")
+        return db.label_count(instrument.symbol, profile.name)
 
     for i in range(labellable):
         cid = ids[i]

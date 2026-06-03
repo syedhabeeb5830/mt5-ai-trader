@@ -48,6 +48,9 @@ from ml.instrument_config import (
 )
 
 
+MAX_FEATURE_ROWS = 1_000_000
+
+
 # ── Indicator helpers ─────────────────────────────────────────────────────────
 
 def _ema(s: pd.Series, p: int) -> pd.Series:
@@ -293,7 +296,7 @@ def compute_features(
     Returns the total number of feature rows in DB after this run.
     """
     _BATCH_SIZE = 5_000   # rows per SQLite executemany call
-    _LOG_EVERY  = 1_000   # progress line every N rows written
+    _LOG_EVERY  = 1_000   # progress line every N rows processed
 
     db           = get_db()
     profile_name = label_profile_name or instrument.label_profile
@@ -314,7 +317,7 @@ def compute_features(
     # ── Load all TF candles ───────────────────────────────────────────────────
     all_bars: dict[str, pd.DataFrame] = {}
     for tf in instrument.timeframes:
-        rows = db.get_candles(sym, tf, limit=500_000)
+        rows = db.get_candles(sym, tf, limit=MAX_FEATURE_ROWS)
         if not rows:
             continue
         df = pd.DataFrame(rows)
@@ -328,7 +331,7 @@ def compute_features(
         return 0
 
     # ── Load entry-TF candles that need features ──────────────────────────────
-    entry_candles = db.get_candles(sym, entry_tf, limit=500_000, since_ts=since_ts)
+    entry_candles = db.get_candles(sym, entry_tf, limit=MAX_FEATURE_ROWS, since_ts=since_ts)
     if not entry_candles:
         if verbose:
             print(f"  [{sym}] No new candles to process.")
@@ -346,6 +349,8 @@ def compute_features(
     tf_feat_dfs: list[pd.DataFrame] = []
     for tf, df in all_bars.items():
         if len(df) < 30:
+            if verbose:
+                print(f"    {tf:>4}: skipped — only {len(df):,} bars (<30 minimum)", flush=True)
             continue
         t_tf = time.perf_counter()
         feat_df = _vectorize_tf_features(df, tf)
@@ -399,15 +404,39 @@ def compute_features(
     # ── Phase 3: Filter to needed rows, drop warmup rows ─────────────────────
     combined["_ts_int"] = (combined.index.astype("int64") // 10**9).astype(int)
     need_ts         = set(cid_by_ts.keys())
-    rows_to_write   = combined[combined["_ts_int"].isin(need_ts)]
+    matched_rows    = combined[combined["_ts_int"].isin(need_ts)]
 
     MIN_NONZERO    = 10
-    nonzero_counts = (rows_to_write.drop(columns=["_ts_int"]) != 0.0).sum(axis=1)
-    rows_to_write  = rows_to_write[nonzero_counts >= MIN_NONZERO]
+    nonzero_counts = (matched_rows.drop(columns=["_ts_int"]) != 0.0).sum(axis=1)
+    rows_to_write  = matched_rows[nonzero_counts >= MIN_NONZERO]
 
     skipped      = n_entry - len(rows_to_write)
     feature_cols = [c for c in combined.columns if c != "_ts_int"]
     n_rows       = len(rows_to_write)
+
+    if verbose:
+        warmup_dropped = len(matched_rows) - n_rows
+        min_nonzero = int(nonzero_counts.min()) if len(nonzero_counts) else 0
+        max_nonzero = int(nonzero_counts.max()) if len(nonzero_counts) else 0
+        print(
+            f"  [{sym}] Filter detail: entry={n_entry:,}, timestamp_matches={len(matched_rows):,}, "
+            f"warmup_or_sparse_dropped={warmup_dropped:,}, nonzero_range={min_nonzero}-{max_nonzero}",
+            flush=True,
+        )
+
+    if n_rows == 0:
+        combined_first = int(combined["_ts_int"].iloc[0]) if len(combined) else None
+        combined_last = int(combined["_ts_int"].iloc[-1]) if len(combined) else None
+        need_first = min(need_ts) if need_ts else None
+        need_last = max(need_ts) if need_ts else None
+        raise RuntimeError(
+            f"[{sym}] Feature generation produced 0 writable rows. "
+            f"entry_candles={n_entry}, combined_rows={len(combined)}, "
+            f"timestamp_matches={len(matched_rows)}, "
+            f"combined_ts_range={combined_first}..{combined_last}, "
+            f"needed_ts_range={need_first}..{need_last}. "
+            "Check timeframe alignment, stale feature resume state, and warmup filtering."
+        )
 
     # ── Phase 4: Vectorised write — numpy array avoids Python row-iteration ───
     # Converting to numpy once means json.dumps is the only per-row Python work.
@@ -416,10 +445,10 @@ def compute_features(
 
     written     = 0
     t_write     = time.perf_counter()
-    t_last_log  = t_write
     batch: list[dict] = []
 
     for i in range(n_rows):
+        processed = i + 1
         ts_int = int(ts_arr[i])
         fvec   = dict(zip(feature_cols, feat_np[i].tolist()))
         batch.append({
@@ -436,16 +465,15 @@ def compute_features(
             written += len(batch)
             batch = []
 
-        # Progress + ETA every _LOG_EVERY rows
-        if verbose and written > 0 and written % _LOG_EVERY == 0:
+        # Progress + ETA every _LOG_EVERY processed rows, independent of DB batch size.
+        if verbose and (processed % _LOG_EVERY == 0 or processed == n_rows):
             now     = time.perf_counter()
             elapsed = now - t_write
-            rps     = written / elapsed if elapsed > 0 else 1
-            eta_s   = (n_rows - written) / rps
-            pct     = written / n_rows * 100
-            print(f"  [{sym}] Writing {written:>{len(str(n_rows))},}/{n_rows:,} "
+            rps     = processed / elapsed if elapsed > 0 else 1
+            eta_s   = (n_rows - processed) / rps
+            pct     = processed / n_rows * 100
+            print(f"  [{sym}] Writing {processed:>{len(str(n_rows))},}/{n_rows:,} "
                   f"({pct:5.1f}%)  {rps:,.0f} rows/s  ETA {eta_s:.0f}s", flush=True)
-            t_last_log = now
 
     if batch:
         db.upsert_features(batch)

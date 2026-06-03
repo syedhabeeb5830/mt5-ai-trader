@@ -23,6 +23,9 @@ from typing import Any, Generator, Iterator
 from ml.instrument_config import DATA_DB
 
 
+MAX_QUERY_ROWS = 1_000_000
+
+
 # ── Schema ─────────────────────────────────────────────────────────────────────
 
 SCHEMA = """
@@ -209,7 +212,7 @@ class Database:
         self,
         symbol: str,
         label_profile: str,
-        limit: int = 50000,
+        limit: int = MAX_QUERY_ROWS,
         since_ts: int | None = None,
     ) -> list[dict]:
         sql = """
@@ -249,7 +252,7 @@ class Database:
         symbol: str,
         label_profile: str,
         direction: str = "BUY",
-        limit: int = 50000,
+        limit: int = MAX_QUERY_ROWS,
     ) -> list[dict]:
         with self._conn() as conn:
             rows = conn.execute(

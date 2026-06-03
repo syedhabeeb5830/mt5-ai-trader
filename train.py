@@ -11,6 +11,7 @@ ONE COMMAND for everything.
   python train.py --retrain        retrain with new live data included
   python train.py --monitor        check model health
   python train.py --status         DB summary + model inventory
+    python train.py --validate       end-to-end data/features/labels/model validation
 
   python train.py --symbol EURUSD  run for a specific instrument
   python train.py --all            run for all configured instruments
@@ -115,6 +116,18 @@ def run_monitor(symbol: str | None, all_instruments: bool, retrain: bool) -> Non
             print(f"\n[{inst.symbol}] Retraining triggered...")
             for d in ["BUY", "SELL"]:
                 train(inst, direction=d)
+
+
+def run_validate(symbol: str | None, all_instruments: bool, run_backtest: bool = True) -> None:
+    from ml.validator import validate
+
+    ok = validate(
+        symbols=[symbol] if symbol else None,
+        all_instruments=all_instruments,
+        run_backtest=run_backtest,
+    )
+    if not ok:
+        sys.exit(1)
 
 
 def run_status() -> None:
@@ -229,6 +242,7 @@ def main() -> None:
     modes.add_argument("--retrain",  action="store_true", help="Retrain with new live data")
     modes.add_argument("--monitor",  action="store_true", help="Model health check")
     modes.add_argument("--status",   action="store_true", help="DB + model inventory")
+    modes.add_argument("--validate", action="store_true", help="End-to-end readiness validation")
 
     # Target
     parser.add_argument("--symbol",    default="",  help="Instrument (default: .env SYMBOL)")
@@ -240,6 +254,8 @@ def main() -> None:
                         help="Auto retrain when monitor detects degradation")
     parser.add_argument("--recompute", action="store_true",
                         help="Recompute features/labels from scratch")
+    parser.add_argument("--no-backtest", action="store_true",
+                        help="Skip walk-forward backtests during --validate")
 
     args = parser.parse_args()
 
@@ -271,6 +287,10 @@ def main() -> None:
     elif args.monitor:
         _banner("Model Health Monitor")
         run_monitor(sym, args.all, retrain=args.retrain_if_degraded)
+
+    elif args.validate:
+        _banner("End-to-End Validation")
+        run_validate(sym, args.all, run_backtest=not args.no_backtest)
 
     else:
         # Default: full pipeline
