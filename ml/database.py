@@ -159,8 +159,9 @@ class Database:
             VALUES (:symbol, :timeframe, :ts, :open, :high, :low, :close, :volume, :spread)
         """
         with self._conn() as conn:
+            before = conn.total_changes
             conn.executemany(sql, rows)
-            return conn.execute("SELECT changes()").fetchone()[0]
+            return conn.total_changes - before
 
     def get_candles(
         self,
@@ -200,8 +201,9 @@ class Database:
               (:candle_id, :symbol, :timeframe, :ts, :label_profile, :feature_json)
         """
         with self._conn() as conn:
+            before = conn.total_changes
             conn.executemany(sql, rows)
-            return conn.execute("SELECT changes()").fetchone()[0]
+            return conn.total_changes - before
 
     def get_features(
         self,
@@ -238,8 +240,9 @@ class Database:
                :label, :bars_to_exit, :exit_price)
         """
         with self._conn() as conn:
+            before = conn.total_changes
             conn.executemany(sql, rows)
-            return conn.execute("SELECT changes()").fetchone()[0]
+            return conn.total_changes - before
 
     def get_labels(
         self,
